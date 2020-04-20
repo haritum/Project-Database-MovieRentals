@@ -1,0 +1,97 @@
+/* Q1: Which category of family movies is least popular? */
+```sql
+WITH table_fc AS
+    (SELECT  f.title AS film_title,
+            c.name AS category_name
+    FROM film AS f
+    JOIN film_category AS fc
+        ON fc.film_id = f.film_id
+    JOIN category AS c
+        ON c.category_id = fc.category_id),
+
+    table_frc AS
+    (SELECT  f.title AS film_title,
+              COUNT(r.inventory_id) OVER (PARTITION BY f.title) AS rental_count
+      FROM film AS f
+      JOIN inventory AS i
+          ON f.film_id = i.film_id
+      JOIN rental AS r
+          ON r.inventory_id = i.inventory_id
+      )
+
+
+SELECT DISTINCT(tfrc.film_title), tfc.category_name, tfrc.rental_count
+FROM table_frc AS tfrc
+JOIN table_fc AS tfc
+    ON tfc.film_title = tfrc.film_title
+WHERE tfc.category_name LIKE ('Animation','Children','Classics','Comedy','Family','Music')
+ORDER BY 1;
+```
+
+
+
+/* Q2: Which category of family movies are rented (on average) for < 5 days? */
+```sql
+SELECT  f.title AS film_title,
+        c.name AS category_name,
+        f.rental_duration AS film_rental_duration,
+        NTILE(4) OVER (PARTITION BY f.rental_duration) AS standard_quartile
+FROM film AS f
+JOIN film_category AS fc
+    ON fc.film_id = f.film_id
+JOIN category AS c
+    ON c.category_id = fc.category_id
+WHERE c.name IN ('Animation','Children','Classics','Comedy','Family','Music')
+GROUP BY 1,2,3
+ORDER BY 3;
+```
+
+
+/* Q3:In which month of the year does most rentals occur?*/
+```sql
+SELECT  DATE_PART('month',r.rental_date) AS Rental_month,
+        DATE_PART('year',r.rental_date) AS Rental_year,
+        s.store_id AS Store_ID,
+        COUNT(*) AS Count_rentals
+FROM rental AS r
+JOIN staff AS s
+ON r.staff_id = s.staff_id
+GROUP BY 1,2,3
+ORDER BY 4 DESC
+```
+
+
+/* Q4: Who among the top 10 customers pays most?*/
+```sql
+WITH customer_payments AS
+        (SELECT DATE_TRUNC('month',p.payment_date) AS pay_month,
+               c.first_name || ' ' || c.last_name AS fullname,
+               COUNT(*) AS pay_countpermon,
+               SUM(p.amount) AS pay_amount
+        FROM customer AS c
+        JOIN payment AS p
+            ON p.customer_id = c.customer_id
+        WHERE DATE_TRUNC('month', p.payment_date) > '2006-12-31'
+        GROUP BY 1,2
+        ORDER BY 2),
+
+     customer_top10 AS
+        (SELECT  c.first_name || ' ' || c.last_name AS fullname,
+                SUM(p.amount) AS total_amout
+        FROM customer AS c
+        JOIN payment AS p
+            ON p.customer_id = c.customer_id
+        GROUP BY 1
+        ORDER BY 2 DESC
+        LIMIT 10)
+
+
+SELECT  cp.pay_month AS pay_month,
+        cp.fullname AS fullname,
+        cp.pay_countpermon AS pay_countpermon,
+        cp.pay_amount AS pay_amount
+FROM customer_top10 AS c10
+JOIN customer_payments AS cp
+    ON cp.fullname = c10.fullname
+```
+
